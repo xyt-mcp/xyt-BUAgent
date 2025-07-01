@@ -8,19 +8,33 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// 集成 swagger 文档
+import setupSwagger from './swagger.js';
+setupSwagger(app);
+
 
 // 新优态AI接口基础URL
-const BASE_URL = 'https://xinyoutai.apifox.cn';
-
-// 示例：企业助手版本id、模型服务id等可配置
-const DEFAULT_ASSISTANT_ID = '1704806933013553154'; // 示例对话助手版本id
-const DEFAULT_MODEL_SERVICE_ID = '1783672782255861761'; // 示例模型服务id
+const BASE_URL = 'https://cloud.xinyoutai.net';
 
 
-// 获取企业助手信息（企业名片）
+// 模型服务id已移至 config.js
+
+import { API_KEY, TENANT_ID, DEFAULT_MODEL_SERVICE_ID } from './config.js';
+const COMMON_HEADERS = {
+  'x-api-key': `Bearer ${API_KEY}`,
+  'tenant-id': TENANT_ID,
+  'Content-Type': 'application/json',
+};
+
+
+// 获取企业助手信息（企业名片）支持传递 assistantId 参数
 app.get('/api/assistant', async (req, res) => {
+  const assistantId = req.query.assistantId;
+  if (!assistantId) {
+    return res.status(400).json({ msg: '缺少 assistantId 参数' });
+  }
   try {
-    const result = await axios.get(`${BASE_URL}/copywriting/scene/user/${DEFAULT_ASSISTANT_ID}`);
+    const result = await axios.get(`${BASE_URL}/copywriting/scene/user/${assistantId}`, { headers: COMMON_HEADERS });
     res.json(result.data);
   } catch {
     res.status(500).json({ msg: '获取企业助手信息失败' });
@@ -34,6 +48,7 @@ app.get('/api/dialogue/list', async (req, res) => {
   try {
     const result = await axios.get(`${BASE_URL}/copywriting/dialogue/list`, {
       params: { pageNum, pageSize, orderByColumn, isAsc, manageId, isUser },
+      headers: COMMON_HEADERS,
     });
     res.json(result.data);
   } catch {
@@ -45,7 +60,7 @@ app.get('/api/dialogue/list', async (req, res) => {
 app.get('/api/message/list/:userDialogueId', async (req, res) => {
   const { userDialogueId } = req.params;
   try {
-    const result = await axios.get(`${BASE_URL}/copywriting/message/list/${userDialogueId}`);
+    const result = await axios.get(`${BASE_URL}/copywriting/message/list/${userDialogueId}`, { headers: COMMON_HEADERS });
     res.json(result.data);
   } catch {
     res.status(500).json({ msg: '获取对话消息列表失败' });
@@ -56,7 +71,7 @@ app.get('/api/message/list/:userDialogueId', async (req, res) => {
 app.get('/api/dialogue/close/:userDialogueId', async (req, res) => {
   const { userDialogueId } = req.params;
   try {
-    const result = await axios.get(`${BASE_URL}/copywriting/dialogue/sse/close/${userDialogueId}`);
+    const result = await axios.get(`${BASE_URL}/copywriting/dialogue/sse/close/${userDialogueId}`, { headers: COMMON_HEADERS });
     res.json(result.data);
   } catch {
     res.status(500).json({ msg: '关闭对话失败' });
@@ -66,7 +81,7 @@ app.get('/api/dialogue/close/:userDialogueId', async (req, res) => {
 // 获取用户模型服务列表
 app.get('/api/model/list', async (req, res) => {
   try {
-    const result = await axios.get(`${BASE_URL}/copywriting/user-model/model-list`, { params: req.query });
+    const result = await axios.get(`${BASE_URL}/copywriting/user-model/model-list`, { params: req.query, headers: COMMON_HEADERS });
     res.json(result.data);
   } catch {
     res.status(500).json({ msg: '获取模型服务列表失败' });
@@ -76,7 +91,7 @@ app.get('/api/model/list', async (req, res) => {
 // 获取文本生成历史记录
 app.get('/api/copywriting/record-list', async (req, res) => {
   try {
-    const result = await axios.get(`${BASE_URL}/copywriting/userCopywriting/record-list`, { params: req.query });
+    const result = await axios.get(`${BASE_URL}/copywriting/userCopywriting/record-list`, { params: req.query, headers: COMMON_HEADERS });
     res.json(result.data);
   } catch {
     res.status(500).json({ msg: '获取文本生成历史失败' });
@@ -87,7 +102,7 @@ app.get('/api/copywriting/record-list', async (req, res) => {
 app.post('/api/copywriting/generate/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await axios.post(`${BASE_URL}/copywriting/userCopywriting/${id}`, req.body);
+    const result = await axios.post(`${BASE_URL}/copywriting/userCopywriting/${id}`, req.body, { headers: COMMON_HEADERS });
     res.json(result.data);
   } catch {
     res.status(500).json({ msg: '生成内容失败' });
@@ -98,7 +113,7 @@ app.post('/api/copywriting/generate/:id', async (req, res) => {
 app.post('/api/dialogue/send-message/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await axios.post(`${BASE_URL}/copywriting/dialogue/sse/send-message/${id}`, req.body);
+    const result = await axios.post(`${BASE_URL}/copywriting/dialogue/sse/send-message/${id}`, req.body, { headers: COMMON_HEADERS });
     res.json(result.data);
   } catch {
     res.status(500).json({ msg: '对话助手流接口异常' });
@@ -108,7 +123,7 @@ app.post('/api/dialogue/send-message/:id', async (req, res) => {
 // 声音转文字接口
 app.post('/api/audio-to-text', async (req, res) => {
   try {
-    const result = await axios.post(`${BASE_URL}/copywriting/message/audio-to-text`, req.body);
+    const result = await axios.post(`${BASE_URL}/copywriting/message/audio-to-text`, req.body, { headers: COMMON_HEADERS });
     res.json(result.data);
   } catch {
     res.status(500).json({ msg: '音频转文字失败' });
@@ -134,15 +149,11 @@ app.post('/api/chat', async (req, res) => {
     const aiRes = await axios.post(
       `${BASE_URL}/copywriting/dialogue/sse/send-message`,
       body,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+      { headers: COMMON_HEADERS }
     );
     // 返回AI对话流内容（可根据前端需求调整）
     res.json({ data: aiRes.data });
-  } catch (e) {
+  } catch {
     res.status(500).json({ msg: 'AI对话服务异常' });
   }
 });
